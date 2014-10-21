@@ -14,11 +14,42 @@ freq_dict = {'delta': [-np.inf, 4],
 __all__ = ['extract_raw_values',
            'extract_band',
            'extract_freq_power',
-           'read_dump']
+           'read_dump',
+           'unravel_raw_values']
 
 
-# Munging
-def read_dump(dump_path, quality_cutoff=5,
+# Munging and I/O
+def unravel_raw_values(df, freq='2ms'):
+    '''
+    Unravels the values in "raw_values" so that we can concatenate
+    across multiple timepoints, subjects, etc.
+    
+    raw_values contains an array of timepoints over 2 seconds, this basically
+    turns it into a different entry for each number, and interpolates the
+    timing between the first/last timepoint.
+    
+    INPUTS
+    --------
+    df : (pandas DataFrame)
+        The dataframe from a raw dump that you want unraveled.
+    freq : (str)
+        The period of the input signal (roughly). AKA, 1/Fs
+    '''
+    vals_df = []
+    for ix, row in df.iloc[np.random.randint(0, df.shape[0], 1000), :].iterrows():
+        vals = extract_raw_values(row)
+        
+        # Create time index for given set of vals, assuming Fs is 512Hz
+        vals_ix = pd.date_range(df.index[0], periods=vals.shape[0], freq=freq)
+        id_ix = [row['username']] * len(vals_ix)
+        columns = ['raw_values']
+        new_ix = pd.MultiIndex.from_arrays([vals_ix, id_ix], names=['time', 'id'])
+        vals_df.append(pd.DataFrame(vals, index=new_ix, columns=columns))
+    vals_df = pd.concat(vals_df)
+    return vals_df
+
+
+def read_dump(dump_path, kind='json', quality_cutoff=5,
               dtype_list_of_ints=['id', 'signal_quality']):
     '''
     Reads in data in the form of a csv file (located at dump_path).
@@ -26,7 +57,11 @@ def read_dump(dump_path, quality_cutoff=5,
     change, this will probably break.
     '''
     # Pull data from dump
-    df = pd.read_csv(dump_path).set_index(['start_time'])
+    if kind == 'csv':
+        df = pd.read_csv(dump_path)
+    elif kind == 'json':
+        df = pd.read_json(dump_path)
+    df = df.set_index(['start_time'])
     df = df.replace('\N', np.NaN).dropna(axis=0)
     df[dtype_list_of_ints] = df[dtype_list_of_ints].astype(int)
     df.index = pd.to_datetime(df.index)
