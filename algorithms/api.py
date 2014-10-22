@@ -36,7 +36,7 @@ def unravel_raw_values(df, freq='2ms'):
         The period of the input signal (roughly). AKA, 1/Fs
     '''
     vals_df = []
-    for ix, row in df.iloc[np.random.randint(0, df.shape[0], 1000), :].iterrows():
+    for ix, row in df.iterrows():
         vals = extract_raw_values(row)
         
         # Create time index for given set of vals, assuming Fs is 512Hz
@@ -70,6 +70,9 @@ def read_dump(dump_path, kind='json', quality_cutoff=5,
 
 
 def extract_raw_values(series):
+    '''Simple function to extract the "raw_values" field of a series and
+    do some quick string processing on it.
+    '''
     return np.array(series['raw_values'].strip('{}').split(',')).astype(int)
 
 
@@ -96,12 +99,12 @@ def extract_band(signal, Fs, freq_band, kind='timeseries'):
         try:
             lo, hi = freq_dict[freq_band]
         except NameError:
-            print("freq_band must be one of: {0}".format(freq_dict.keys()))    
+            raise NameError("freq_band must be one of: {0}".format(freq_dict.keys()))
     else:
         try:
             lo, hi = freq_band
         except (ValueError, TypeError):
-            print('You need to supply a two-length value, or a string for freq_band')
+            raise NameError('You need to supply a two-length value, or a string for freq_band')
             
     if kind == 'timeseries':
         signal_out = band_pass_filter(signal.T, Fs, lo, hi)
@@ -112,6 +115,9 @@ def extract_band(signal, Fs, freq_band, kind='timeseries'):
 
 
 def extract_freq_power(signal, Fs, apply_log=True):
+    '''Extracts the full PSD for an input signal. Assumes
+    that the signal is time x sources
+    '''
     psd, freqs_psd = multitaper_psd(signal.T, Fs)
     if apply_log:
         psd = np.log(psd)
