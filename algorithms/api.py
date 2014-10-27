@@ -4,6 +4,7 @@ import mne
 import pandas as pd
 from mne.time_frequency import multitaper_psd
 from mne.filter import band_pass_filter
+from IPython import embed
 
 freq_dict = {'delta': [-np.inf, 4],
              'theta': [4, 7],
@@ -11,7 +12,8 @@ freq_dict = {'delta': [-np.inf, 4],
              'beta': [16, 31],
              'gamma': [32, 70]}
 
-__all__ = ['extract_raw_values',
+__all__ = ['convert_to_short_format',
+           'extract_raw_values',
            'extract_band',
            'extract_freq_power',
            'read_dump',
@@ -19,7 +21,16 @@ __all__ = ['extract_raw_values',
 
 
 # Munging and I/O
-def unravel_raw_values(df, freq='2ms'):
+def convert_to_short_format(df, pull_cols=['start_time', 'end_time', 'username']):
+    data_str = str(df['data'].values)
+    # Reset index so we have access to start_time again
+    stt, end, usr = df.reset_index().iloc[0, :][pull_cols]
+    data_concat = np.array([df['data'].values, stt, end, usr])
+    df = pd.DataFrame(data_concat[None, :], columns=['data']+pull_cols).set_index(['start_time'])
+    return df
+
+
+def unravel_raw_values(df, freq='2ms', raw_label='raw_values', id_label='username'):
     '''
     Unravels the values in "raw_values" so that we can concatenate
     across multiple timepoints, subjects, etc.
@@ -37,12 +48,12 @@ def unravel_raw_values(df, freq='2ms'):
     '''
     vals_df = []
     for ix, row in df.iterrows():
-        vals = extract_raw_values(row)
+        vals = extract_raw_values(row, raw_label=raw_label)
         
         # Create time index for given set of vals, assuming Fs is 512Hz
         vals_ix = pd.date_range(df.index[0], periods=vals.shape[0], freq=freq)
-        id_ix = [row['username']] * len(vals_ix)
-        columns = ['raw_values']
+        id_ix = [row[id_label]] * len(vals_ix)
+        columns = [raw_label]
         new_ix = pd.MultiIndex.from_arrays([vals_ix, id_ix], names=['time', 'id'])
         vals_df.append(pd.DataFrame(vals, index=new_ix, columns=columns))
     vals_df = pd.concat(vals_df)
@@ -50,7 +61,7 @@ def unravel_raw_values(df, freq='2ms'):
 
 
 def read_dump(dump_path, kind='json', quality_cutoff=5,
-              dtype_list_of_ints=['id', 'signal_quality']):
+              dtype_list_of_ints=['signal_quality']):
     '''
     Reads in data in the form of a csv file (located at dump_path).
     Note that it must have a very particular structure, so if variables
@@ -69,11 +80,15 @@ def read_dump(dump_path, kind='json', quality_cutoff=5,
     return df
 
 
-def extract_raw_values(series):
+def extract_raw_values(series, raw_label='raw_values'):
     '''Simple function to extract the "raw_values" field of a series and
     do some quick string processing on it.
     '''
-    return np.array(series['raw_values'].strip('{}').split(',')).astype(int)
+    data_label = series[raw_label]
+    if isinstance(data_label, str):
+        return np.array(data_label.strip('{}').split(',')).astype(int)
+    else:
+        return np.array(data_label).astype(int)
 
 
 # Feature extraction
