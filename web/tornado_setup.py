@@ -75,7 +75,7 @@ def main(port=8989, viz=False):
     http_server.listen(port)
     tornado.ioloop.IOLoop.instance().start()
 
-VIZ = False
+VIZ = True
 
 if __name__ == "__main__":
     if VIZ:
